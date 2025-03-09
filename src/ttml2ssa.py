@@ -287,12 +287,14 @@ class Ttml2Ssa(object):
         return style
 
 
-    def _extract_dialogue(self, nodes, styles=[]):
+    def _extract_dialogue(self, nodes, styles=[], ass_styles=[]):
         """Extract text content and styling attributes from <p> elements.
 
         Args:
             nodes (xml.dom.minidom.Node): List of <p> elements
             styles (list): List of style signifiers that should be
+                applied to each node
+            ass_styles (list): List of ASS style signifiers that should be
                 applied to each node
 
         Return:
@@ -303,6 +305,7 @@ class Ttml2Ssa(object):
 
         for node in nodes:
             _styles = []
+            _ass_styles = []
 
             if node.nodeType == node.TEXT_NODE:
                 format_str = '{}'
@@ -317,6 +320,8 @@ class Ttml2Ssa(object):
                         ot='<{}>'.format(style),
                         f=format_str)
 
+                if ass_styles:
+                    dialogue.append('{' + ''.join(ass_styles) + '}')
                 dialogue.append(format_str.format(text))
 
             elif node.localName == 'br':
@@ -330,9 +335,16 @@ class Ttml2Ssa(object):
                 assoc_italic = style_attrs['style_id'] in self._italic_style_ids
                 if inline_italic or assoc_italic or node.parentNode.getAttribute('style') == 'AmazonDefaultStyle':
                     _styles.append('i')
+                inline_color = self._styles[style_attrs['style_id']]['color']
+                if inline_color != '':
+                    rgba = Ttml2Ssa._hex_to_rgba(inline_color)
+                    inline_color = Ttml2Ssa._rgba_to_bgr_asshex(rgba)
+                    inline_color_alpha = Ttml2Ssa._rgba_to_alpha_asshex(rgba)
+                    _ass_styles.append('\\1c' + inline_color)
+                    _ass_styles.append('\\1a' + inline_color_alpha)
 
             if node.hasChildNodes():
-                dialogue += self._extract_dialogue(node.childNodes, _styles)
+                dialogue += self._extract_dialogue(node.childNodes, _styles, _ass_styles)
 
         return ''.join(dialogue)
 
@@ -736,6 +748,41 @@ class Ttml2Ssa(object):
 
         hex_number = "&H" + format(number, '08x').upper()
         return hex_number
+
+    @staticmethod
+    def _hex_to_rgba(value: str) -> tuple[int, int, int, int]:
+        """Convert a hex RGB(A) string into a RGBA tuple.
+
+        Possible string formats:
+            * ``#RRGGBBAA``
+            * ``#RRGGBB``
+            * ``RRGGBBAA``
+            * ``RRGGBB``
+        """
+        value = value.lstrip('#')
+        lv = len(value)
+
+        if lv == 6:  # RGB
+            r, g, b = tuple(int(value[i:i + 2], base=16) for i in range(0, lv, 2))
+            return (r, g, b, 255)   # Default alpha to 255 (fully opaque)
+        elif lv == 8:  # RGBA
+            r, g, b, a = tuple(int(value[i:i + 2], base=16) for i in range(0, lv, 2))
+            return (r, g, b, a)
+        else:
+            raise ValueError("Invalid hex color format. Must be 6 or 8 characters long.")
+
+    @staticmethod
+    def _rgba_to_bgr_asshex(rgba: tuple[int, int, int, int]) -> str:
+        """Convert RGBA tuple to ASS inline BGR format: ``&HBBGGRR&``"""
+        return f'&H{rgba[2]:02X}{rgba[1]:02X}{rgba[0]:02X}&'
+
+    @staticmethod
+    def _rgba_to_alpha_asshex(rgba: tuple[int, int, int, int]) -> str:
+        """Convert RGBA tuple to ASS inline alpha format: ``&HAA&``"""
+
+        # ASS transparency values are inverse to the usual values
+        # with 255 being fully transparent and 0 being fully opaque.
+        return f'&H{255 - rgba[3]:02X}&'
 
     @staticmethod
     def _snake_to_camel(s):
