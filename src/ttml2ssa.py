@@ -203,8 +203,8 @@ class Ttml2Ssa(object):
 
         # Grab <style>s
         # https://www.w3.org/TR/ttml1/#styling-attribute-vocabulary
-        for styles_container in ttml_dom.getElementsByTagName('styling'):
-            for style in styles_container.getElementsByTagName('style'):
+        for styles_container in ttml_dom.getElementsByTagNameNS('*', 'styling'):
+            for style in styles_container.getElementsByTagNameNS('*', 'style'):
                 style_id = getattr(
                     style.attributes.get('xml:id', {}), 'value', None)
                 if not style_id:
@@ -214,8 +214,8 @@ class Ttml2Ssa(object):
                     self._italic_style_ids.append(style_id)
 
         # Grab top regions
-        for layout_container in ttml_dom.getElementsByTagName('layout'):
-            for region in layout_container.getElementsByTagName('region'):
+        for layout_container in ttml_dom.getElementsByTagNameNS('*', 'layout'):
+            for region in layout_container.getElementsByTagNameNS('*', 'region'):
                 region_id = getattr(
                     region.attributes.get('xml:id', {}), 'value', None)
                 if region_id:
@@ -223,7 +223,7 @@ class Ttml2Ssa(object):
                     if region.getAttribute('tts:displayAlign') == 'before':
                         self._top_regions_ids.append(region_id)
                     # Case 2: displayAlign is in layout -> region -> style
-                    for style in region.getElementsByTagName('style'):
+                    for style in region.getElementsByTagNameNS('*', 'style'):
                         if style.getAttribute('tts:displayAlign') == 'before':
                             self._top_regions_ids.append(region_id)
 
