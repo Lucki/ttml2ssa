@@ -72,6 +72,7 @@ class Ttml2Ssa(object):
         self._top_regions_ids = []
 
         self._allowed_style_attrs = (
+            'backgroundColor',
             'color',
             'fontStyle',
             'fontWeight',
@@ -342,6 +343,13 @@ class Ttml2Ssa(object):
                     inline_color_alpha = Ttml2Ssa._rgba_to_alpha_asshex(rgba)
                     _ass_styles.append('\\1c' + inline_color)
                     _ass_styles.append('\\1a' + inline_color_alpha)
+                inline_bcolor = self._styles[style_attrs['style_id']]['background_color']
+                if inline_bcolor != '':
+                    rgba = Ttml2Ssa._hex_to_rgba(inline_bcolor)
+                    inline_bcolor = Ttml2Ssa._rgba_to_bgr_asshex(rgba)
+                    inline_bcolor_alpha = Ttml2Ssa._rgba_to_alpha_asshex(rgba)
+                    _ass_styles.append('\\3c' + inline_bcolor)
+                    _ass_styles.append('\\3a' + inline_bcolor_alpha)
 
             if node.hasChildNodes():
                 dialogue += self._extract_dialogue(node.childNodes, _styles, _ass_styles)
