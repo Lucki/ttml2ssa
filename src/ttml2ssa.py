@@ -41,8 +41,6 @@ class Ttml2Ssa(object):
         'FILM2PAL' : 24/25
     }
 
-    TOP_MARKER = '{\\an8}'
-
     def __init__(self, shift=0, source_fps=23.976, scale_factor=1, subtitle_language=None):
         self.shift = shift
         self.source_fps = source_fps
@@ -76,6 +74,7 @@ class Ttml2Ssa(object):
             'color',
             'fontStyle',
             'fontWeight',
+            'textAlign',
         )
 
         ## This variable stores the language ID from the xml file.
@@ -367,14 +366,31 @@ class Ttml2Ssa(object):
                 begin in ms,
                 end in ms,
                 text content in Subrip (SRT) format,
-                position (top or bottom) where the text should appear
+                position (1..9) where the text should appear
         """
 
         begin = paragraph.attributes['begin'].value
         end = paragraph.attributes['end'].value
 
+        style = None
+        if 'style' in paragraph.attributes:
+            style = paragraph.attributes['style'].value
+
         ms_begin = self._tc.timeexpr_to_ms(begin)
         ms_end = self._tc.timeexpr_to_ms(end)
+
+        alignment = None
+        if style and 'text_align' in self._styles[style]:
+            alignment = self._styles[style]['text_align']
+
+        if alignment and alignment == 'center':
+            alignment = 0
+        elif alignment and alignment == 'left':
+            alignment = -1
+        elif alignment and alignment == 'right':
+            alignment = 1
+        else:
+            alignment = 0
 
         dialogue = self._extract_dialogue(paragraph.childNodes)
 
@@ -387,7 +403,10 @@ class Ttml2Ssa(object):
                 new_text += line
         dialogue = new_text
 
-        position = 'top' if paragraph.getAttribute('region') in self._top_regions_ids else 'bottom'
+        # Region information is stored in a numpad layout with numbers 1 to 9
+        # 1 is the lower left and 9 is the upper right corner
+        position = 8 if paragraph.getAttribute('region') in self._top_regions_ids else 2
+        position += alignment
 
         return ms_begin, ms_end, dialogue, position
 
@@ -440,7 +459,7 @@ class Ttml2Ssa(object):
                 entry = {}
                 entry['ms_begin'] = self._tc.timeexpr_to_ms(time1)
                 entry['ms_end'] = self._tc.timeexpr_to_ms(time2)
-                entry['position'] = 'top' if m.group('pos') and float(m.group('pos')) < 50 else 'bottom'
+                entry['position'] = 8 if m.group('pos') and float(m.group('pos')) < 50 else 2
                 text = ""
                 while i < len(lines):
                     line = lines[i].strip()
@@ -473,8 +492,10 @@ class Ttml2Ssa(object):
             # Remove <c> </c> tags
             text = re.sub('</??c.*?>', '', text)
 
-            if self.allow_top_pos and entry['position'] == 'top':
-                text = Ttml2Ssa.TOP_MARKER + text
+            position = entry['position']
+            if not self.allow_top_pos and entry['position'] > 6:
+                position = position - 6
+            text = '{\\an' + str(position) + '}' + text
 
             res += srt_format_str.format(entry_count, \
                                          self._tc.ms_to_subrip(entry['ms_begin']), \
@@ -499,7 +520,7 @@ class Ttml2Ssa(object):
             text = re.sub('</??c.*?>', '', text)
 
             pos_str = 'line:90%,end'
-            if self.allow_top_pos and entry['position'] == 'top':
+            if self.allow_top_pos and entry['position'] > 6:
                 pos_str = 'line:10%,start'
 
             res += vtt_format_str.format(self._tc.ms_to_subrip(entry['ms_begin']).replace(',','.'), \
@@ -536,8 +557,10 @@ class Ttml2Ssa(object):
                         ('<.*?>', '')]:
                 text = re.sub(tag[0], tag[1], text)
 
-            if self.allow_top_pos and entry['position'] == 'top':
-                text = Ttml2Ssa.TOP_MARKER + text
+            position = entry['position']
+            if not self.allow_top_pos and entry['position'] > 6:
+                position = position - 6
+            text = '{\\an' + str(position) + '}' + text
 
             res += ssa_format_str.format(self._tc.ms_to_ssa(entry['ms_begin']), self._tc.ms_to_ssa(entry['ms_end']), text)
         return res
